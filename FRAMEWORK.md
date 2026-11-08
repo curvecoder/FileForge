@@ -39,7 +39,7 @@ FileForge is a shared Windows system engineering library dedicated to **high-per
   - `ReadExistingLinesAsync(cancellationToken)`: Asynchronously reads existing non-header lines to hydrate deduplication caches on startup.
   - `AppendLineAsync(line, cancellationToken)`: Thread-safe streaming line appender with `AutoFlush` and `SemaphoreSlim` synchronization.
   - `EscapeField(value, delimiter)`: RFC 4180-compliant field escaping (handling commas, line breaks, and escaped double quotes).
-- **`ProtectedFileStore`**:
+- **`ProtectedFileStore`** (shipped in the portable `FileForge.Core` package, `net8.0`, usable from applications that do not target Windows):
   - `ReadSecret()` / `WriteSecret(secret)` / `ClearSecret()`: Secure local secret storage on encrypted files (DPAPI `ProtectedData` scoped to `CurrentUser` on Windows, AES-256 with prefixed IV as fallback).
   - `EncryptAesWithEntropy(plainBytes, entropy)` / `DecryptAesWithEntropy(cipherData, entropy)`: Symmetric AES-256 encryption primitives bound to application-specific entropy.
 

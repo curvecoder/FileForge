@@ -43,14 +43,35 @@ dotnet add package FileForge.Core --version 1.3.0
 ## Code Example
 
 ```csharp
-using FileForge.Core.IO;
+using System.Text;
+using FileForge.IO;
 
-// Thread-safe RFC 4180 CSV writer with non-blocking shared access
-await using var writer = new PersistentDelimitedFileWriter("audit_log.csv", delimiter: ",");
-await writer.InitializeAsync();
+// Appends to audit.csv with shared read/write access; the header is written only when the file is created.
+await using (var writer = new PersistentDelimitedFileWriter("audit.csv", "Timestamp,Host,Port,Process"))
+{
+    await writer.InitializeAsync();
 
-// Append record safely across concurrent threads
-await writer.AppendLineAsync(["2026-10-24T12:00:00Z", "10.10.1.5", "443", "nginx", "TCP"]);
+    string[] fields = ["2026-10-24T12:00:00Z", "nas.home.arpa", "443", "=cmd|' /C calc'!A0"];
+
+    // neutralizeFormulas: true keeps a spreadsheet from evaluating a field that starts with =, +, - or @.
+    var line = string.Join(',', fields.Select(field => PersistentDelimitedFileWriter.EscapeField(field, ',', neutralizeFormulas: true)));
+    await writer.AppendLineAsync(line);
+}
+
+// Reads the file back record by record; quoted fields may hold delimiters and line breaks.
+using var reader = new StreamReader("audit.csv");
+await foreach (var record in DelimitedRecordReader.ReadRecordsAsync(reader))
+{
+    Console.WriteLine($"{record.LineNumber}: {string.Join(" | ", record.Fields)}");
+}
+
+// NDJSON without a byte order mark, which some JSON Lines readers reject.
+await using var ndjson = new PersistentDelimitedFileWriter("audit.ndjson", string.Empty, new UTF8Encoding(false));
+await ndjson.InitializeAsync();
+await ndjson.AppendLineAsync("""{"host":"nas.home.arpa","port":443}""");
+
+// Replaces a file so that a reader or a crash sees the previous content or the new one, never a mix.
+await AtomicFileWriter.WriteAllTextAsync("settings.json", """{"interval":30}""");
 ```
 
 ---

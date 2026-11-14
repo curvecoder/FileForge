@@ -35,7 +35,7 @@ High-performance .NET system engineering library for thread-safe streaming I/O, 
 Add the package via the .NET CLI:
 
 ```powershell
-dotnet add package FileForge.Core --version 1.1.1
+dotnet add package FileForge.Core --version 1.3.0
 ```
 
 ---

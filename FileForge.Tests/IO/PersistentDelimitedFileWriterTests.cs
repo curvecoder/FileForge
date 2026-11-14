@@ -62,6 +62,53 @@ public sealed class PersistentDelimitedFileWriterTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AppendLineAsync_WhenExistingFileIsReopened_DoesNotWriteAnotherByteOrderMark()
+    {
+        // Arrange
+        var testFile = Path.Combine(_tempDirectory, "reopened.csv");
+        await using (var firstWriter = new PersistentDelimitedFileWriter(testFile, "Host"))
+        {
+            await firstWriter.InitializeAsync();
+            await firstWriter.AppendLineAsync("nas.home.arpa");
+        }
+
+        await using var writer = new PersistentDelimitedFileWriter(testFile, "Host");
+        await writer.InitializeAsync();
+
+        // Act
+        await writer.AppendLineAsync("printer.home.arpa");
+        await writer.DisposeAsync();
+
+        // Assert
+        var bytes = await File.ReadAllBytesAsync(testFile);
+        var expected = Utf8ByteOrderMark.Concat(Encoding.UTF8.GetBytes(
+            "Host" + Environment.NewLine + "nas.home.arpa" + Environment.NewLine + "printer.home.arpa" + Environment.NewLine));
+        bytes.Should().Equal(expected);
+    }
+
+    [Fact]
+    public async Task ReadExistingLinesAsync_WhenFileWasWrittenInUtf16_ReturnsTheAppendedLines()
+    {
+        // Arrange
+        var testFile = Path.Combine(_tempDirectory, "utf16.csv");
+        await using (var firstWriter = new PersistentDelimitedFileWriter(testFile, "Host", Encoding.Unicode))
+        {
+            await firstWriter.InitializeAsync();
+            await firstWriter.AppendLineAsync("nas.home.arpa");
+        }
+
+        await using var writer = new PersistentDelimitedFileWriter(testFile, "Host", Encoding.Unicode);
+        await writer.InitializeAsync();
+        await writer.AppendLineAsync("printer.home.arpa");
+
+        // Act
+        var lines = await writer.ReadExistingLinesAsync();
+
+        // Assert
+        lines.Should().Equal("nas.home.arpa", "printer.home.arpa");
+    }
+
+    [Fact]
     public async Task InitializeAsync_WhenNoEncodingGiven_StartsFileWithUtf8ByteOrderMark()
     {
         // Arrange

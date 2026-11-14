@@ -16,6 +16,7 @@ High-performance .NET system engineering library for thread-safe streaming I/O, 
 ### 1. High-Performance Streaming I/O & Cryptography (`FileForge.IO`)
 * **`FileCopier`**: Stream-based direct copy engine supporting cooperative cancellation (`CancellationToken`), dynamic buffer size calculation (64 KB to 16 MB), metadata and ACL preservation, and cryptographic integrity verification.
 * **`PersistentDelimitedFileWriter`**: Thread-safe delimited file writer (CSV, TSV) with non-blocking shared access (`FileShare.ReadWrite`), dynamic deduplication cache rehydration, and RFC 4180 compliance (automatic escaping of commas, quotes, and line breaks).
+* **`DelimitedRecordReader`**: RFC 4180 reader that returns each record with the line it starts on, quoted fields holding line breaks included.
 * **`ProtectedFileStore`**: Secure local secret storage using Windows DPAPI (`ProtectedData` under `CurrentUser`) with AES-256 fallback and application-specific entropy.
 * **Cryptographic Hashing**: Synchronous and asynchronous SHA-256 and SHA-512 hashing for disk files, memory streams, and magic byte file header inspections.
 

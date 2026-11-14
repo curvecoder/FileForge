@@ -39,6 +39,8 @@ FileForge is a shared Windows system engineering library dedicated to **high-per
   - `ReadExistingLinesAsync(cancellationToken)`: Asynchronously reads existing non-header lines to hydrate deduplication caches on startup.
   - `AppendLineAsync(line, cancellationToken)`: Thread-safe streaming line appender with `AutoFlush` and `SemaphoreSlim` synchronization.
   - `EscapeField(value, delimiter)`: RFC 4180-compliant field escaping (handling commas, line breaks, and escaped double quotes).
+- **`DelimitedRecordReader`** (static, `FileForge.Core`):
+  - `ReadRecordsAsync(reader, delimiter, cancellationToken)`: Reads a delimited text (CSV, TSV) record by record according to RFC 4180, as `DelimitedRecord(LineNumber, Fields)`. A quoted field may hold delimiters, line breaks and doubled quotes, so a record written by `EscapeField` is read back whole. `LineNumber` is the physical line on which the record starts. Records end with CRLF, LF or a lone CR; empty lines are skipped; a quote inside an unquoted field is kept as text. A quoted field still open at the end of the text throws `InvalidDataException` naming the line where it opens.
 - **`ProtectedFileStore`** (shipped in the portable `FileForge.Core` package, `net8.0`, usable from applications that do not target Windows):
   - `ReadSecret()` / `WriteSecret(secret)` / `ClearSecret()`: Secure local secret storage on encrypted files (DPAPI `ProtectedData` scoped to `CurrentUser` on Windows, AES-256 with prefixed IV as fallback).
   - `EncryptAesWithEntropy(plainBytes, entropy)` / `DecryptAesWithEntropy(cipherData, entropy)`: Symmetric AES-256 encryption primitives bound to application-specific entropy.

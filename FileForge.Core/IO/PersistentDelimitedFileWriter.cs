@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 
 namespace FileForge.IO;
@@ -8,6 +9,11 @@ namespace FileForge.IO;
 /// </summary>
 public sealed class PersistentDelimitedFileWriter : IAsyncDisposable
 {
+    // Excel and LibreOffice evaluate a cell starting with one of the ASCII characters (OWASP CSV injection list).
+    // The full-width forms are covered too, since some spreadsheet input settings normalise them to ASCII.
+    private static readonly SearchValues<char> FormulaLeadCharacters =
+        SearchValues.Create("=+-@\t\r＝＋－＠");
+
     private readonly string _filePath;
     private readonly string _headerLine;
     private readonly Encoding _encoding;
@@ -185,6 +191,29 @@ public sealed class PersistentDelimitedFileWriter : IAsyncDisposable
         }
 
         return $"\"{value.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
+    }
+
+    /// <summary>
+    /// Escapes a text value according to RFC 4180 and, on request, keeps a spreadsheet from reading it as a formula.
+    /// </summary>
+    /// <param name="value">Raw text value.</param>
+    /// <param name="delimiter">Field separator.</param>
+    /// <param name="neutralizeFormulas">
+    /// When <see langword="true"/>, a value starting with <c>=</c>, <c>+</c>, <c>-</c>, <c>@</c>, a tab, a carriage return,
+    /// or the full-width <c>＝</c>, <c>＋</c>, <c>－</c>, <c>＠</c>, is prefixed with an apostrophe before being escaped,
+    /// so that a spreadsheet opening the file shows it as text, apostrophe included, instead of evaluating it (CSV formula injection).
+    /// A negative number such as <c>-5</c> is prefixed too. When <see langword="false"/>, the result is the one of
+    /// <see cref="EscapeField(string, char)"/>.
+    /// </param>
+    /// <returns>The escaped value.</returns>
+    public static string EscapeField(string value, char delimiter, bool neutralizeFormulas)
+    {
+        if (!neutralizeFormulas || string.IsNullOrEmpty(value) || !FormulaLeadCharacters.Contains(value[0]))
+        {
+            return EscapeField(value, delimiter);
+        }
+
+        return EscapeField("'" + value, delimiter);
     }
 
     /// <inheritdoc />

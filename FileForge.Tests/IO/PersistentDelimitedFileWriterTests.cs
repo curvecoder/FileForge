@@ -214,4 +214,77 @@ public sealed class PersistentDelimitedFileWriterTests : IAsyncLifetime
         // Assert
         result.Should().Be(expected);
     }
+
+    [Fact]
+    public void EscapeField_WhenNeutralizationIsNotRequested_KeepsLeadingFormulaCharacter()
+    {
+        // Act
+        var result = PersistentDelimitedFileWriter.EscapeField("=HYPERLINK(\"http://nas.home.arpa\")", ',');
+
+        // Assert
+        result.Should().Be("\"=HYPERLINK(\"\"http://nas.home.arpa\"\")\"");
+    }
+
+    [Theory]
+    [InlineData("=1+1", "'=1+1")]
+    [InlineData("+cmd|' /C calc'!A0", "'+cmd|' /C calc'!A0")]
+    [InlineData("-2+3", "'-2+3")]
+    [InlineData("@SUM(A1:A2)", "'@SUM(A1:A2)")]
+    [InlineData("\tcalc", "'\tcalc")]
+    [InlineData("\rcalc", "\"'\rcalc\"")]
+    [InlineData("＝1+1", "'＝1+1")]
+    [InlineData("＋1", "'＋1")]
+    [InlineData("－1", "'－1")]
+    [InlineData("＠SUM(A1)", "'＠SUM(A1)")]
+    public void EscapeField_WhenNeutralizationIsRequestedAndFieldStartsWithFormulaCharacter_PrefixesApostrophe(string input, string expected)
+    {
+        // Act
+        var result = PersistentDelimitedFileWriter.EscapeField(input, ',', neutralizeFormulas: true);
+
+        // Assert
+        result.Should().Be(expected);
+    }
+
+    [Fact]
+    public void EscapeField_WhenNeutralizedFieldHoldsDelimiter_QuotesTheField()
+    {
+        // Act
+        var result = PersistentDelimitedFileWriter.EscapeField("=A1;B1", ';', neutralizeFormulas: true);
+
+        // Assert
+        result.Should().Be("\"'=A1;B1\"");
+    }
+
+    [Theory]
+    [InlineData("", "")]
+    [InlineData("192.168.1.10", "192.168.1.10")]
+    [InlineData("a=b", "a=b")]
+    [InlineData("value,with,commas", "\"value,with,commas\"")]
+    public void EscapeField_WhenNeutralizationIsRequestedAndFieldDoesNotStartWithFormulaCharacter_EscapesAsBefore(string input, string expected)
+    {
+        // Act
+        var result = PersistentDelimitedFileWriter.EscapeField(input, ',', neutralizeFormulas: true);
+
+        // Assert
+        result.Should().Be(expected);
+    }
+
+    [Fact]
+    public async Task EscapeField_WhenNeutralizedFieldIsReadBack_ReturnsPrefixedValue()
+    {
+        // Arrange
+        var line = PersistentDelimitedFileWriter.EscapeField("=1+1", ',', neutralizeFormulas: true) + ","
+            + PersistentDelimitedFileWriter.EscapeField("@a,b", ',', neutralizeFormulas: true);
+        using var reader = new StringReader(line);
+
+        // Act
+        var records = new List<DelimitedRecord>();
+        await foreach (var record in DelimitedRecordReader.ReadRecordsAsync(reader))
+        {
+            records.Add(record);
+        }
+
+        // Assert
+        records.Should().ContainSingle().Which.Fields.Should().Equal("'=1+1", "'@a,b");
+    }
 }

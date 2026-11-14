@@ -35,13 +35,59 @@ public static class DelimitedRecordReader
         char delimiter = ',',
         CancellationToken cancellationToken = default)
     {
+        ThrowIfInvalid(reader, delimiter);
+        return ReadValidatedRecordsAsync(reader, delimiter, cancellationToken);
+    }
+
+    /// <summary>
+    /// Reads every record of a delimited text synchronously, with the same rules as
+    /// <see cref="ReadRecordsAsync(TextReader, char, CancellationToken)"/>, for callers that are synchronous themselves
+    /// and would otherwise have to block on the asynchronous reader.
+    /// </summary>
+    /// <param name="reader">Source text.</param>
+    /// <param name="delimiter">Field separator; neither a quote nor a line break.</param>
+    /// <returns>The records, in file order, read from <paramref name="reader"/> as they are enumerated.</returns>
+    /// <exception cref="ArgumentNullException">When <paramref name="reader"/> is null.</exception>
+    /// <exception cref="ArgumentException">When <paramref name="delimiter"/> is a quote or a line break.</exception>
+    /// <exception cref="InvalidDataException">During enumeration, when a quoted field is still open at the end of the text.</exception>
+    public static IEnumerable<DelimitedRecord> ReadRecords(TextReader reader, char delimiter = ',')
+    {
+        ThrowIfInvalid(reader, delimiter);
+        return ReadValidatedRecords(reader, delimiter);
+    }
+
+    // The arguments are checked here rather than in the iterators, whose bodies only run on the first MoveNext:
+    // a caller gets the exception at the call, not later wherever the sequence is enumerated.
+    private static void ThrowIfInvalid(TextReader reader, char delimiter)
+    {
         ArgumentNullException.ThrowIfNull(reader);
         if (delimiter is '"' or '\r' or '\n')
         {
             throw new ArgumentException("The delimiter cannot be a quote or a line break.", nameof(delimiter));
         }
+    }
 
-        return ReadValidatedRecordsAsync(reader, delimiter, cancellationToken);
+    private static IEnumerable<DelimitedRecord> ReadValidatedRecords(TextReader reader, char delimiter)
+    {
+        var buffer = new char[BufferSize];
+        var builder = new DelimitedRecordBuilder(delimiter);
+
+        int read;
+        while ((read = reader.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            for (var index = 0; index < read; index++)
+            {
+                if (builder.Accept(buffer[index]) is { } record)
+                {
+                    yield return record;
+                }
+            }
+        }
+
+        if (builder.Complete() is { } last)
+        {
+            yield return last;
+        }
     }
 
     private static async IAsyncEnumerable<DelimitedRecord> ReadValidatedRecordsAsync(

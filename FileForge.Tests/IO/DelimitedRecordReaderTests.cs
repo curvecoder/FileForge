@@ -306,6 +306,97 @@ public sealed class DelimitedRecordReaderTests
         await read.Should().ThrowAsync<OperationCanceledException>();
     }
 
+    [Fact]
+    public void ReadRecords_WhenAQuotedFieldSpansLines_ReturnsOneRecordHoldingTheLineBreaks()
+    {
+        // Arrange
+        const string text = "java,\"-jar app.jar\r\n--port 8080\",192.168.1.30\r\nsshd,-D,192.168.1.31\r\n";
+
+        // Act
+        var records = DelimitedRecordReader.ReadRecords(new StringReader(text)).ToList();
+
+        // Assert
+        records.Should().HaveCount(2);
+        records[0].Fields.Should().Equal("java", "-jar app.jar\r\n--port 8080", "192.168.1.30");
+        records[0].LineNumber.Should().Be(1);
+        records[1].Fields.Should().Equal("sshd", "-D", "192.168.1.31");
+        records[1].LineNumber.Should().Be(3);
+    }
+
+    [Theory]
+    [InlineData("a\nb\rc\r\nd", ',')]
+    [InlineData("\r\n\r\na,b\r\n\r\nc", ',')]
+    [InlineData("\"say \"\"hi\"\", then leave\",next", ',')]
+    [InlineData("a;\"b;c\";\"d\"\"e\"\r\n;;", ';')]
+    [InlineData("\"\"\r\n   \r\n\"a\"tail,x", ',')]
+    [InlineData("", ',')]
+    public async Task ReadRecords_WhenGivenTheSameText_ReturnsTheRecordsOfReadRecordsAsync(string text, char delimiter)
+    {
+        // Arrange
+        var expected = await ReadAllAsync(text, delimiter);
+
+        // Act
+        var records = DelimitedRecordReader.ReadRecords(new StringReader(text), delimiter).ToList();
+
+        // Assert
+        records.Should().BeEquivalentTo(expected, options => options.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void ReadRecords_WhenALineBreakOrADoubledQuoteStraddlesTheReadBuffer_ReadsThemWhole()
+    {
+        // Arrange: CR at index 4095 and LF at 4096; the doubled quote at 8191 and 8192 (the read buffer holds 4096 characters).
+        var firstLine = new string('x', 4095);
+        var secondLineStart = new string('y', 4091);
+        var text = firstLine + "\r\n" + secondLineStart + ",\"c\"\"d\"";
+
+        // Act
+        var records = DelimitedRecordReader.ReadRecords(new StringReader(text)).ToList();
+
+        // Assert
+        text.Substring(8191, 2).Should().Be("\"\"");
+        records.Should().HaveCount(2);
+        records[0].Fields.Should().Equal(firstLine);
+        records[1].Fields.Should().Equal(secondLineStart, "c\"d");
+        records.Select(record => record.LineNumber).Should().Equal(1, 2);
+    }
+
+    [Fact]
+    public void ReadRecords_WhenAQuoteIsNeverClosed_ThrowsDuringEnumerationNamingTheLineWhereItOpens()
+    {
+        // Arrange
+        var records = DelimitedRecordReader.ReadRecords(new StringReader("a,b\r\nc,\"-jar app.jar\r\n--port 8080\r\n"));
+
+        // Act
+        var read = () => records.ToList();
+
+        // Assert
+        read.Should().Throw<InvalidDataException>().WithMessage("*line 2*");
+    }
+
+    [Theory]
+    [InlineData('"')]
+    [InlineData('\r')]
+    [InlineData('\n')]
+    public void ReadRecords_WhenTheDelimiterIsAQuoteOrALineBreak_ThrowsArgumentExceptionBeforeEnumeration(char delimiter)
+    {
+        // Act
+        var read = () => DelimitedRecordReader.ReadRecords(new StringReader("a"), delimiter);
+
+        // Assert
+        read.Should().Throw<ArgumentException>().WithParameterName("delimiter");
+    }
+
+    [Fact]
+    public void ReadRecords_WhenTheReaderIsNull_ThrowsArgumentNullExceptionBeforeEnumeration()
+    {
+        // Act
+        var read = () => DelimitedRecordReader.ReadRecords(null!);
+
+        // Assert
+        read.Should().Throw<ArgumentNullException>().WithParameterName("reader");
+    }
+
     private static async Task<List<DelimitedRecord>> ReadAllAsync(string text, char delimiter = ',')
     {
         var records = new List<DelimitedRecord>();

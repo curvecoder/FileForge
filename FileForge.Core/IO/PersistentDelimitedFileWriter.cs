@@ -25,7 +25,9 @@ public sealed class PersistentDelimitedFileWriter : IAsyncDisposable
     /// Initializes a new delimited file writer that writes UTF-8 with a byte order mark.
     /// </summary>
     /// <param name="filePath">Path of the target file.</param>
-    /// <param name="headerLine">Header line written when the file is created.</param>
+    /// <param name="headerLine">
+    /// Header line written when the file is created; when empty or white space, no header is written or skipped on read.
+    /// </param>
     public PersistentDelimitedFileWriter(string filePath, string headerLine)
         : this(filePath, headerLine, Encoding.UTF8)
     {
@@ -35,7 +37,9 @@ public sealed class PersistentDelimitedFileWriter : IAsyncDisposable
     /// Initializes a new delimited file writer that writes and reads the file with the given encoding.
     /// </summary>
     /// <param name="filePath">Path of the target file.</param>
-    /// <param name="headerLine">Header line written when the file is created.</param>
+    /// <param name="headerLine">
+    /// Header line written when the file is created; when empty or white space, no header is written or skipped on read.
+    /// </param>
     /// <param name="encoding">
     /// Encoding of the file. Its preamble, if any, starts a new file: pass <c>new UTF8Encoding(false)</c>
     /// for NDJSON, which some JSON Lines readers reject when it starts with a byte order mark.
@@ -99,8 +103,12 @@ public sealed class PersistentDelimitedFileWriter : IAsyncDisposable
     }
 
     /// <summary>
-    /// Asynchronously reads every existing line of the file (header excluded), so that callers can rebuild their deduplication caches.
+    /// Asynchronously reads every existing line of the file, header excluded when one is configured, so that callers can rebuild their deduplication caches.
     /// </summary>
+    /// <remarks>
+    /// The first non-empty line is taken as the header and skipped, unless the header line given to the constructor
+    /// is empty or white space, in which case every non-empty line is returned.
+    /// </remarks>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The existing lines.</returns>
     public async Task<IReadOnlyList<string>> ReadExistingLinesAsync(CancellationToken cancellationToken = default)
@@ -118,7 +126,8 @@ public sealed class PersistentDelimitedFileWriter : IAsyncDisposable
             using var readStream = new FileStream(_filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             using var reader = new StreamReader(readStream, _encoding);
 
-            var isHeader = true;
+            // InitializeAsync writes no header line when the header is blank (NDJSON): the first line is then a record.
+            var isHeader = !string.IsNullOrWhiteSpace(_headerLine);
             while (await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false) is { } line)
             {
                 cancellationToken.ThrowIfCancellationRequested();

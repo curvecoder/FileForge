@@ -203,6 +203,29 @@ public sealed class PersistentDelimitedFileWriterTests : IAsyncLifetime
     }
 
     [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task ReadExistingLinesAsync_WhenHeaderLineIsBlank_ReturnsFirstRecord(string headerLine)
+    {
+        // Arrange
+        var testFile = Path.Combine(_tempDirectory, "audit.ndjson");
+        await using (var firstWriter = new PersistentDelimitedFileWriter(testFile, headerLine, new UTF8Encoding(false)))
+        {
+            await firstWriter.InitializeAsync();
+            await firstWriter.AppendLineAsync("{\"host\":\"nas.home.arpa\"}");
+            await firstWriter.AppendLineAsync("{\"host\":\"printer.home.arpa\"}");
+        }
+
+        await using var writer = new PersistentDelimitedFileWriter(testFile, headerLine, new UTF8Encoding(false));
+
+        // Act
+        var lines = await writer.ReadExistingLinesAsync();
+
+        // Assert
+        lines.Should().Equal("{\"host\":\"nas.home.arpa\"}", "{\"host\":\"printer.home.arpa\"}");
+    }
+
+    [Theory]
     [InlineData("simple", "simple")]
     [InlineData("value,with,commas", "\"value,with,commas\"")]
     [InlineData("value \"with\" quotes", "\"value \"\"with\"\" quotes\"")]

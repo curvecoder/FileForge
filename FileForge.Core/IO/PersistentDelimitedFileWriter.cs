@@ -10,22 +10,41 @@ public sealed class PersistentDelimitedFileWriter : IAsyncDisposable
 {
     private readonly string _filePath;
     private readonly string _headerLine;
+    private readonly Encoding _encoding;
     private readonly SemaphoreSlim _semaphore = new(1, 1);
     private FileStream? _fileStream;
     private StreamWriter? _streamWriter;
 
     /// <summary>
-    /// Initializes a new delimited file writer.
+    /// Initializes a new delimited file writer that writes UTF-8 with a byte order mark.
     /// </summary>
     /// <param name="filePath">Path of the target file.</param>
     /// <param name="headerLine">Header line written when the file is created.</param>
     public PersistentDelimitedFileWriter(string filePath, string headerLine)
+        : this(filePath, headerLine, Encoding.UTF8)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new delimited file writer that writes and reads the file with the given encoding.
+    /// </summary>
+    /// <param name="filePath">Path of the target file.</param>
+    /// <param name="headerLine">Header line written when the file is created.</param>
+    /// <param name="encoding">
+    /// Encoding of the file. Its preamble, if any, starts a new file: pass <c>new UTF8Encoding(false)</c>
+    /// for NDJSON, which some JSON Lines readers reject when it starts with a byte order mark.
+    /// </param>
+    /// <exception cref="ArgumentException"><paramref name="filePath"/> is empty or white space.</exception>
+    /// <exception cref="ArgumentNullException">An argument is <see langword="null"/>.</exception>
+    public PersistentDelimitedFileWriter(string filePath, string headerLine, Encoding encoding)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
         ArgumentNullException.ThrowIfNull(headerLine);
+        ArgumentNullException.ThrowIfNull(encoding);
 
         _filePath = filePath;
         _headerLine = headerLine;
+        _encoding = encoding;
     }
 
     /// <summary>
@@ -53,7 +72,7 @@ public sealed class PersistentDelimitedFileWriter : IAsyncDisposable
                 4096,
                 useAsync: true);
 
-            _streamWriter = new StreamWriter(_fileStream, Encoding.UTF8, bufferSize: 4096, leaveOpen: true)
+            _streamWriter = new StreamWriter(_fileStream, _encoding, bufferSize: 4096, leaveOpen: true)
             {
                 AutoFlush = true
             };
@@ -91,7 +110,7 @@ public sealed class PersistentDelimitedFileWriter : IAsyncDisposable
         try
         {
             using var readStream = new FileStream(_filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            using var reader = new StreamReader(readStream, Encoding.UTF8);
+            using var reader = new StreamReader(readStream, _encoding);
 
             var isHeader = true;
             while (await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false) is { } line)

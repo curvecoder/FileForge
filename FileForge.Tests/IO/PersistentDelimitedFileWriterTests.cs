@@ -1,3 +1,4 @@
+using System.Text;
 using AwesomeAssertions;
 using FileForge.IO;
 using Xunit;
@@ -6,6 +7,8 @@ namespace FileForge.Tests.IO;
 
 public sealed class PersistentDelimitedFileWriterTests : IAsyncLifetime
 {
+    private static readonly byte[] Utf8ByteOrderMark = [0xEF, 0xBB, 0xBF];
+
     private readonly string _tempDirectory = Path.Combine(Path.GetTempPath(), "FileForge_Delimited_" + Guid.NewGuid().ToString("N"));
 
     public Task InitializeAsync()
@@ -56,6 +59,83 @@ public sealed class PersistentDelimitedFileWriterTests : IAsyncLifetime
         // Assert
         var content = await File.ReadAllLinesAsync(testFile);
         content.Should().Equal("Header", "Line1", "Line2");
+    }
+
+    [Fact]
+    public async Task InitializeAsync_WhenNoEncodingGiven_StartsFileWithUtf8ByteOrderMark()
+    {
+        // Arrange
+        var testFile = Path.Combine(_tempDirectory, "default_encoding.csv");
+        await using var writer = new PersistentDelimitedFileWriter(testFile, "ColA");
+
+        // Act
+        await writer.InitializeAsync();
+        await writer.DisposeAsync();
+
+        // Assert
+        var bytes = await File.ReadAllBytesAsync(testFile);
+        bytes.Should().StartWith(Utf8ByteOrderMark);
+    }
+
+    [Fact]
+    public async Task AppendLineAsync_WhenEncodingHasNoByteOrderMark_WritesNdjsonWithoutByteOrderMark()
+    {
+        // Arrange
+        var testFile = Path.Combine(_tempDirectory, "audit.ndjson");
+        await using var writer = new PersistentDelimitedFileWriter(testFile, string.Empty, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        await writer.InitializeAsync();
+
+        // Act
+        await writer.AppendLineAsync("{\"host\":\"nas.home.arpa\"}");
+        await writer.DisposeAsync();
+
+        // Assert
+        var bytes = await File.ReadAllBytesAsync(testFile);
+        bytes.Should().Equal(Encoding.UTF8.GetBytes("{\"host\":\"nas.home.arpa\"}" + Environment.NewLine));
+    }
+
+    [Fact]
+    public async Task AppendLineAsync_WhenEncodingIsGiven_WritesTextInThatEncoding()
+    {
+        // Arrange
+        var testFile = Path.Combine(_tempDirectory, "latin1.csv");
+        var latin1 = Encoding.Latin1;
+        await using var writer = new PersistentDelimitedFileWriter(testFile, "Hôte", latin1);
+        await writer.InitializeAsync();
+
+        // Act
+        await writer.AppendLineAsync("serveur-é");
+        await writer.DisposeAsync();
+
+        // Assert
+        var bytes = await File.ReadAllBytesAsync(testFile);
+        bytes.Should().Equal(latin1.GetBytes("Hôte" + Environment.NewLine + "serveur-é" + Environment.NewLine));
+    }
+
+    [Fact]
+    public async Task ReadExistingLinesAsync_WhenEncodingIsGiven_DecodesLinesWithThatEncoding()
+    {
+        // Arrange
+        var testFile = Path.Combine(_tempDirectory, "latin1_read.csv");
+        var latin1 = Encoding.Latin1;
+        await File.WriteAllBytesAsync(testFile, latin1.GetBytes("Hôte\r\nserveur-é\r\n"));
+        await using var writer = new PersistentDelimitedFileWriter(testFile, "Hôte", latin1);
+
+        // Act
+        var lines = await writer.ReadExistingLinesAsync();
+
+        // Assert
+        lines.Should().Equal("serveur-é");
+    }
+
+    [Fact]
+    public void Constructor_WhenEncodingIsNull_ThrowsArgumentNullException()
+    {
+        // Act
+        var act = () => new PersistentDelimitedFileWriter("file.csv", "ColA", encoding: null!);
+
+        // Assert
+        act.Should().Throw<ArgumentNullException>().WithParameterName("encoding");
     }
 
     [Fact]

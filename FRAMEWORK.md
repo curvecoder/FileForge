@@ -35,6 +35,7 @@ FileForge is a shared Windows system engineering library dedicated to **high-per
   - `BootstrapInitialCatalog(sourcePath, destinationPath)`: Initializes a retroactive catalog from existing backup targets.
 - **`FileOperationProgress`**: File operation progress model (percentage, bytes transferred, completion state).
 - **`PersistentDelimitedFileWriter`**:
+  - `PersistentDelimitedFileWriter(filePath, headerLine)` / `PersistentDelimitedFileWriter(filePath, headerLine, encoding)`: the file is written and read in UTF-8 with a byte order mark unless an encoding is given; pass `new UTF8Encoding(false)` for NDJSON, which some JSON Lines readers reject when it starts with a byte order mark.
   - `InitializeAsync(cancellationToken)`: Initializes a delimited file (CSV, TSV) in non-blocking shared mode (`FileShare.ReadWrite`), writes headers on creation, or positions the pointer at the end of stream.
   - `ReadExistingLinesAsync(cancellationToken)`: Asynchronously reads existing non-header lines to hydrate deduplication caches on startup.
   - `AppendLineAsync(line, cancellationToken)`: Thread-safe streaming line appender with `AutoFlush` and `SemaphoreSlim` synchronization.

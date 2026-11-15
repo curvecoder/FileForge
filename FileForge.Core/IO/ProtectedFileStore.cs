@@ -7,9 +7,14 @@ namespace FileForge.IO;
 /// Stores a secret or token locally in an encrypted file.
 /// Uses DPAPI (<c>ProtectedData</c> with <c>CurrentUser</c> scope) on Windows, and AES-256 with a prefixed IV elsewhere.
 /// </summary>
+/// <remarks>
+/// Outside Windows the AES key is derived from the entropy, which is not a secret when left at its default: the file is then
+/// only obfuscated. On Linux, prefer <see cref="SecretServiceSecretStore"/> when <see cref="SecretServiceSecretStore.IsAvailableAsync"/> answers <c>true</c>.
+/// Both stores implement <see cref="ISecretStore"/>.
+/// </remarks>
 /// <param name="filePath">Full path of the encrypted file.</param>
 /// <param name="entropy">Optional entropy binding the secret to the application or the device.</param>
-public sealed class ProtectedFileStore(string filePath, byte[]? entropy = null)
+public sealed class ProtectedFileStore(string filePath, byte[]? entropy = null) : ISecretStore
 {
     private static readonly byte[] s_defaultEntropy = Encoding.UTF8.GetBytes("FileForge-ProtectedFileStore-v1");
     private readonly string _filePath = !string.IsNullOrWhiteSpace(filePath)
@@ -87,6 +92,29 @@ public sealed class ProtectedFileStore(string filePath, byte[]? entropy = null)
         {
             // Deletion is best effort: a file already gone or locked leaves the caller with nothing to do, and a locked file is read as before.
         }
+    }
+
+    /// <inheritdoc />
+    public Task<string?> ReadSecretAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(ReadSecret());
+    }
+
+    /// <inheritdoc />
+    public Task WriteSecretAsync(string secret, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        WriteSecret(secret);
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task ClearSecretAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ClearSecret();
+        return Task.CompletedTask;
     }
 
     /// <summary>

@@ -51,6 +51,13 @@ FileForge est la bibliothèque partagée d'ingénierie système pour Windows dé
 - **`ProtectedFileStore`** (livré dans le package portable `FileForge.Core`, `net8.0`, utilisable par les applications qui ne ciblent pas Windows) :
   - `ReadSecret()` / `WriteSecret(secret)` / `ClearSecret()` : Persistance locale sécurisée de secrets sur fichier chiffré (DPAPI `ProtectedData` en portée `CurrentUser` sous Windows, AES-256 avec IV préfixé en repli).
   - `EncryptAesWithEntropy(plainBytes, entropy)` / `DecryptAesWithEntropy(cipherData, entropy)` : Primitives de chiffrement symétrique AES-256 liées à une entropie applicative.
+  - Implémente aussi `ISecretStore` (`ReadSecretAsync` / `WriteSecretAsync` / `ClearSecretAsync`, tous avec un `CancellationToken`). Hors Windows, la clé AES provient de l'entropie, publique si elle reste à sa valeur par défaut : le fichier n'est alors qu'obscurci ; préférer `SecretServiceSecretStore` sous Linux.
+- **`ISecretStore`** : contrat commun pour lire, écrire et supprimer un petit secret de façon asynchrone ; permet à une application de choisir un magasin selon la plateforme. Les échecs lèvent `SecretStoreException` (le message nomme l'opération, jamais le secret) ; `SecretStoreUnavailableException` signale que le magasin est inutilisable sur cette machine.
+- **`SecretServiceSecretStore`** (Linux, Secret Service freedesktop via la commande `secret-tool`, paquet Debian/Ubuntu `libsecret-tools`) :
+  - `new SecretServiceSecretStore(label, attributes)` ou `new SecretServiceSecretStore(label, attributes, runner, timeout)` : l'élément est identifié par des attributs fournis par l'appelant (par exemple `application` et `key`) ; délai par défaut de 10 s par commande.
+  - `IsAvailableAsync(cancellationToken)` : `true` quand `secret-tool` est dans le PATH et qu'un trousseau répond ; `false` quand la commande manque, qu'aucune session D-Bus ne répond ou que le délai expire. À appeler avant de choisir le magasin.
+  - `ReadSecretAsync` (`null` si absent) / `WriteSecretAsync` / `ClearSecretAsync` : le secret passe par l'entrée standard, les attributs sont des arguments séparés, rien ne passe par un shell.
+- **`IProcessRunner`** / **`SystemProcessRunner`** (`ProcessRunRequest`, `ProcessRunResult`) : exécute une commande sans shell (`ArgumentList`), écrit une entrée standard optionnelle, capture les sorties, tue l'arbre de processus au dépassement du délai (`TimeoutException`) ou à l'annulation. Une commande qui ne démarre pas lève `Win32Exception`. À remplacer par un faux dans les tests unitaires.
 
 ### 2. `FileForge.Sync` — Moteur de Synchronisation
 - **`DirectorySynchronizer`** (statique) :

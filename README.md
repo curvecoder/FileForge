@@ -19,6 +19,7 @@ High-performance .NET system engineering library for thread-safe streaming I/O, 
 * **`DelimitedRecordReader`**: RFC 4180 reader that returns each record with the line it starts on, quoted fields holding line breaks included.
 * **`AtomicFileWriter`**: Replaces a file through a temporary file and a rename, so that a reader or a crash sees the previous content or the new one, with recovery of an interrupted write.
 * **`ProtectedFileStore`**: Secure local secret storage using Windows DPAPI (`ProtectedData` under `CurrentUser`) with AES-256 fallback and application-specific entropy.
+* **`SecretServiceSecretStore`**: Linux secret storage in the freedesktop Secret Service through `secret-tool` (`libsecret-tools`), behind the `ISecretStore` contract that `ProtectedFileStore` also implements; process execution goes through `IProcessRunner`.
 * **Cryptographic Hashing**: Synchronous and asynchronous SHA-256 and SHA-512 hashing for disk files, memory streams, and magic byte file header inspections.
 
 ### 2. Physical & Network Storage Resolution (`FileForge.Storage`)

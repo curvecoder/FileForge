@@ -232,6 +232,36 @@ public sealed class SecretServiceSecretStoreTests
         act.Should().Throw<ArgumentException>();
     }
 
+    [Fact]
+    public Task ReadSecretAsync_WhenExitCodeIsOneWithErrorText_ThrowsSecretStoreException()
+    {
+        _runner.Next = new ProcessRunResult(1, string.Empty, "Cannot get secret of a locked object");
+
+        var act = () => CreateStore().ReadSecretAsync(CancellationToken.None);
+
+        return act.Should().ThrowAsync<SecretStoreException>();
+    }
+
+    [Fact]
+    public async Task ReadSecretAsync_WhenErrorTextIsVeryLong_TruncatesItInTheMessage()
+    {
+        _runner.Next = new ProcessRunResult(2, string.Empty, new string('x', 5000));
+
+        var act = () => CreateStore().ReadSecretAsync(CancellationToken.None);
+
+        (await act.Should().ThrowAsync<SecretStoreException>()).Which.Message.Length.Should().BeLessThan(700);
+    }
+
+    [Fact]
+    public void Constructor_WhenAttributeValueIsNull_ThrowsArgumentExceptionNamingTheKey()
+    {
+        var attributes = new Dictionary<string, string> { ["application"] = null! };
+
+        var act = () => new SecretServiceSecretStore("label", attributes, _runner, TimeSpan.FromSeconds(1));
+
+        act.Should().Throw<ArgumentException>().Which.Message.Should().Contain("application");
+    }
+
     private sealed class FakeProcessRunner : IProcessRunner
     {
         public List<ProcessRunRequest> Requests { get; } = [];

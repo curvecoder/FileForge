@@ -54,10 +54,10 @@ FileForge is a shared Windows system engineering library dedicated to **high-per
   - Also implements `ISecretStore` (`ReadSecretAsync` / `WriteSecretAsync` / `ClearSecretAsync`, all taking a `CancellationToken`). Outside Windows the AES key comes from the entropy, which is public when left at its default: the file is only obfuscated, so prefer `SecretServiceSecretStore` on Linux.
 - **`ISecretStore`**: common contract to read, write and delete one small secret asynchronously; lets an application pick a store per platform. Failures raise `SecretStoreException` (message names the operation, never the secret); `SecretStoreUnavailableException` means the store cannot be used on this machine.
 - **`SecretServiceSecretStore`** (Linux, freedesktop Secret Service through the `secret-tool` command, Debian/Ubuntu package `libsecret-tools`):
-  - `new SecretServiceSecretStore(label, attributes)` or `new SecretServiceSecretStore(label, attributes, runner, timeout)`: the item is identified by caller-given attributes (for example `application` and `key`); default timeout 10 s per command.
+  - `new SecretServiceSecretStore(label, attributes)`: the item is identified by caller-given attributes (for example `application` and `key`); default timeout 10 s per command.
   - `IsAvailableAsync(cancellationToken)`: `true` when `secret-tool` is on PATH and a keyring answers; `false` when the command is missing, no D-Bus session answers or the timeout expires. Call it before choosing the store.
   - `ReadSecretAsync` (`null` when absent) / `WriteSecretAsync` / `ClearSecretAsync`: the secret goes through standard input, attributes are separate arguments, nothing runs through a shell.
-- **`IProcessRunner`** / **`SystemProcessRunner`** (`ProcessRunRequest`, `ProcessRunResult`): runs a command without a shell (`ArgumentList`), writes optional standard input, captures output, kills the process tree on timeout (`TimeoutException`) or cancellation. A command that cannot start raises `Win32Exception`. Replace it with a fake in unit tests.
+- Internally the store runs `secret-tool` through an internal process runner (no shell, `ArgumentList`, process tree killed on timeout or cancellation); it is not part of the public API.
 
 ### 2. `FileForge.Sync` — Directory Synchronization Engine
 - **`DirectorySynchronizer`** (static):

@@ -15,6 +15,7 @@ namespace FileForge.IO;
 public sealed class SecretServiceSecretStore : ISecretStore
 {
     private const string CommandName = "secret-tool";
+    private const int MaxErrorTextLength = 500;
 
     private static readonly TimeSpan s_defaultTimeout = TimeSpan.FromSeconds(10);
     private static readonly string[] s_availabilityProbe = ["lookup", "fileforge-probe", "availability"];
@@ -44,7 +45,7 @@ public sealed class SecretServiceSecretStore : ISecretStore
     /// <param name="timeout">Maximum run time of each command; a keyring waiting for a prompt never answers.</param>
     /// <exception cref="ArgumentException">The label is blank, or the attributes are empty or have a blank name.</exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="timeout"/> is not positive.</exception>
-    public SecretServiceSecretStore(
+    internal SecretServiceSecretStore(
         string label,
         IReadOnlyDictionary<string, string> attributes,
         IProcessRunner runner,
@@ -67,8 +68,13 @@ public sealed class SecretServiceSecretStore : ISecretStore
                 throw new ArgumentException("An attribute name cannot be blank.", nameof(attributes));
             }
 
+            if (value is null)
+            {
+                throw new ArgumentException($"The value of the attribute '{name}' cannot be null.", nameof(attributes));
+            }
+
             arguments.Add(name);
-            arguments.Add(value ?? string.Empty);
+            arguments.Add(value);
         }
 
         _label = label;
@@ -143,7 +149,13 @@ public sealed class SecretServiceSecretStore : ISecretStore
 
     private static SecretStoreException Failure(string operation, ProcessRunResult result)
     {
+        // secret-tool never echoes its standard input, so its error text can be quoted; the length stays bounded for the logs.
         var detail = string.IsNullOrWhiteSpace(result.StandardError) ? "no message" : result.StandardError.Trim();
+        if (detail.Length > MaxErrorTextLength)
+        {
+            detail = string.Concat(detail.AsSpan(0, MaxErrorTextLength), "...");
+        }
+
         return new SecretStoreException(string.Create(
             CultureInfo.InvariantCulture,
             $"Secret Service '{operation}' failed with exit code {result.ExitCode}: {detail}"));

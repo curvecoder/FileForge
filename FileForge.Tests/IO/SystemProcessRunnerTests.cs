@@ -7,12 +7,17 @@ namespace FileForge.Tests.IO;
 
 public sealed class SystemProcessRunnerTests
 {
-    private static readonly string s_dotnet = "dotnet";
+    private const string Dotnet = "dotnet";
+
+    private static readonly string s_testAssembly = typeof(SystemProcessRunnerTests).Assembly.Location;
+
+    private static ProcessRunRequest ChildRequest(string mode, string? standardInput, TimeSpan timeout) =>
+        new(Dotnet, [s_testAssembly, mode], standardInput, timeout);
 
     [Fact]
     public async Task RunAsync_WhenCommandSucceeds_ReturnsExitCodeAndOutput()
     {
-        var request = new ProcessRunRequest(s_dotnet, ["--version"], null, TimeSpan.FromSeconds(30));
+        var request = new ProcessRunRequest(Dotnet, ["--version"], null, TimeSpan.FromSeconds(30));
 
         var result = await new SystemProcessRunner().RunAsync(request, CancellationToken.None);
 
@@ -21,13 +26,24 @@ public sealed class SystemProcessRunnerTests
     }
 
     [Fact]
-    public async Task RunAsync_WhenCommandFails_ReturnsNonZeroExitCode()
+    public async Task RunAsync_WhenCommandFails_ReturnsExitCodeAndErrorOutput()
     {
-        var request = new ProcessRunRequest(s_dotnet, ["--no-such-option-for-fileforge"], null, TimeSpan.FromSeconds(30));
+        var result = await new SystemProcessRunner().RunAsync(
+            ChildRequest(Program.FailMode, null, TimeSpan.FromSeconds(30)),
+            CancellationToken.None);
 
-        var result = await new SystemProcessRunner().RunAsync(request, CancellationToken.None);
+        result.ExitCode.Should().Be(3);
+        result.StandardError.Should().Be("failure details");
+    }
 
-        result.ExitCode.Should().NotBe(0);
+    [Fact]
+    public async Task RunAsync_WhenInputIsGiven_WritesItToStandardInput()
+    {
+        var result = await new SystemProcessRunner().RunAsync(
+            ChildRequest(Program.EchoMode, "héllo secret", TimeSpan.FromSeconds(30)),
+            CancellationToken.None);
+
+        result.StandardOutput.Should().Be("héllo secret");
     }
 
     [Fact]
@@ -41,19 +57,9 @@ public sealed class SystemProcessRunnerTests
     }
 
     [Fact]
-    public async Task RunAsync_WhenInputIsGivenToACommandThatIgnoresIt_Completes()
-    {
-        var request = new ProcessRunRequest(s_dotnet, ["--version"], "ignored input", TimeSpan.FromSeconds(30));
-
-        var result = await new SystemProcessRunner().RunAsync(request, CancellationToken.None);
-
-        result.ExitCode.Should().Be(0);
-    }
-
-    [Fact]
     public Task RunAsync_WhenCommandOutlivesTimeout_ThrowsTimeoutException()
     {
-        var request = new ProcessRunRequest("cmd.exe", ["/c", "ping -n 30 127.0.0.1 >nul"], null, TimeSpan.FromMilliseconds(300));
+        var request = ChildRequest(Program.SleepMode, null, TimeSpan.FromMilliseconds(500));
 
         var act = () => new SystemProcessRunner().RunAsync(request, CancellationToken.None);
 
@@ -63,8 +69,8 @@ public sealed class SystemProcessRunnerTests
     [Fact]
     public async Task RunAsync_WhenCancelledWhileRunning_ThrowsOperationCanceledException()
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
-        var request = new ProcessRunRequest("cmd.exe", ["/c", "ping -n 30 127.0.0.1 >nul"], null, TimeSpan.FromSeconds(60));
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+        var request = ChildRequest(Program.SleepMode, null, TimeSpan.FromSeconds(60));
 
         var act = () => new SystemProcessRunner().RunAsync(request, cts.Token);
 
@@ -76,10 +82,26 @@ public sealed class SystemProcessRunnerTests
     {
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
-        var request = new ProcessRunRequest(s_dotnet, ["--version"], null, TimeSpan.FromSeconds(30));
+        var request = new ProcessRunRequest(Dotnet, ["--version"], null, TimeSpan.FromSeconds(30));
 
         var act = () => new SystemProcessRunner().RunAsync(request, cts.Token);
 
         await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
+    public void ToString_WhenRequestHasStandardInput_DoesNotPrintIt()
+    {
+        var request = new ProcessRunRequest("secret-tool", ["store"], "s3cr3t-input", TimeSpan.FromSeconds(1));
+
+        request.ToString().Should().Contain("secret-tool").And.NotContain("s3cr3t-input");
+    }
+
+    [Fact]
+    public void ToString_WhenResultHasStandardOutput_DoesNotPrintIt()
+    {
+        var result = new ProcessRunResult(0, "s3cr3t-output", "warning");
+
+        result.ToString().Should().Contain("0").And.NotContain("s3cr3t-output");
     }
 }

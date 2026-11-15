@@ -54,10 +54,10 @@ FileForge est la bibliothèque partagée d'ingénierie système pour Windows dé
   - Implémente aussi `ISecretStore` (`ReadSecretAsync` / `WriteSecretAsync` / `ClearSecretAsync`, tous avec un `CancellationToken`). Hors Windows, la clé AES provient de l'entropie, publique si elle reste à sa valeur par défaut : le fichier n'est alors qu'obscurci ; préférer `SecretServiceSecretStore` sous Linux.
 - **`ISecretStore`** : contrat commun pour lire, écrire et supprimer un petit secret de façon asynchrone ; permet à une application de choisir un magasin selon la plateforme. Les échecs lèvent `SecretStoreException` (le message nomme l'opération, jamais le secret) ; `SecretStoreUnavailableException` signale que le magasin est inutilisable sur cette machine.
 - **`SecretServiceSecretStore`** (Linux, Secret Service freedesktop via la commande `secret-tool`, paquet Debian/Ubuntu `libsecret-tools`) :
-  - `new SecretServiceSecretStore(label, attributes)` ou `new SecretServiceSecretStore(label, attributes, runner, timeout)` : l'élément est identifié par des attributs fournis par l'appelant (par exemple `application` et `key`) ; délai par défaut de 10 s par commande.
+  - `new SecretServiceSecretStore(label, attributes)` : l'élément est identifié par des attributs fournis par l'appelant (par exemple `application` et `key`) ; délai par défaut de 10 s par commande.
   - `IsAvailableAsync(cancellationToken)` : `true` quand `secret-tool` est dans le PATH et qu'un trousseau répond ; `false` quand la commande manque, qu'aucune session D-Bus ne répond ou que le délai expire. À appeler avant de choisir le magasin.
   - `ReadSecretAsync` (`null` si absent) / `WriteSecretAsync` / `ClearSecretAsync` : le secret passe par l'entrée standard, les attributs sont des arguments séparés, rien ne passe par un shell.
-- **`IProcessRunner`** / **`SystemProcessRunner`** (`ProcessRunRequest`, `ProcessRunResult`) : exécute une commande sans shell (`ArgumentList`), écrit une entrée standard optionnelle, capture les sorties, tue l'arbre de processus au dépassement du délai (`TimeoutException`) ou à l'annulation. Une commande qui ne démarre pas lève `Win32Exception`. À remplacer par un faux dans les tests unitaires.
+- En interne, le magasin lance `secret-tool` par un exécuteur de processus interne (sans shell, `ArgumentList`, arbre de processus tué au dépassement du délai ou à l'annulation) ; il ne fait pas partie de l'API publique.
 
 ### 2. `FileForge.Sync` — Moteur de Synchronisation
 - **`DirectorySynchronizer`** (statique) :
